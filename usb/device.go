@@ -107,6 +107,31 @@ func (d *Device) Close() error {
 	return nil
 }
 
+// KernelDriverActive determines if a kernel driver is active on iface
+func (d *Device) KernelDriverActive(iface uint8) (bool, error) {
+	r := C.libusb_kernel_driver_active(d.handle, C.int(iface));
+	if r < 0 {
+		return false, usbError(r)
+	}
+	return r == 1, nil
+}
+
+// DetachKernelDriver detaches a kernel driver from interface iface
+func (d *Device) DetachKernelDriver(iface uint8) error {
+	if errno := C.libusb_detach_kernel_driver(d.handle, C.int(iface)); errno < 0 {
+		return usbError(errno)
+	}
+	return nil
+}
+
+// AttachKernelDriver (re)attaches a previously detached kernel driver to interface iface
+func (d *Device) AttachKernelDriver(iface uint8) error {
+	if errno := C.libusb_attach_kernel_driver(d.handle, C.int(iface)); errno < 0 {
+		return usbError(errno)
+	}
+	return nil
+}
+
 func (d *Device) OpenEndpoint(conf, iface, setup, epoint uint8) (Endpoint, error) {
 	end := &endpoint{
 		Device: d,
