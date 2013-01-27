@@ -7,6 +7,7 @@ import "C"
 import (
 	"log"
 	"reflect"
+	"runtime"
 	"unsafe"
 )
 
@@ -23,6 +24,10 @@ func NewContext() *Context {
 	c := &Context{
 		done: make(chan struct{}),
 	}
+
+	runtime.SetFinalizer(c, func(c *Context) {
+		c.Close()
+	})
 
 	if errno := C.libusb_init(&c.ctx); errno != 0 {
 		panic(usbError(errno))
@@ -81,7 +86,7 @@ func (c *Context) ListDevices(each func(desc *Descriptor) bool) ([]*Device, erro
 				reterr = err
 				continue
 			}
-			ret = append(ret, newDevice(handle, desc))
+			ret = append(ret, newDevice(c, handle, desc))
 		}
 	}
 	return ret, reterr
