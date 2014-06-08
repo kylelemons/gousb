@@ -26,8 +26,8 @@ import (
 )
 
 type Context struct {
-	ctx  *C.libusb_context
-	done chan struct{}
+	ctx   *C.libusb_context
+	done  chan struct{}
 	yield chan struct{}
 }
 

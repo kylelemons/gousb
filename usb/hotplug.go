@@ -17,26 +17,26 @@ extern int attachCallback(
 import "C"
 
 import (
-	"unsafe"
 	"sync"
+	"unsafe"
 )
 
 type (
-	HotplugEvent C.int
-	HotplugHandle C.libusb_hotplug_callback_handle
+	HotplugEvent    C.int
+	HotplugHandle   C.libusb_hotplug_callback_handle
 	HotplugCallback func(desc *Descriptor, event HotplugEvent) bool
 )
 
 type hotplugCallbackData struct {
-	f HotplugCallback  // The user's function pointer
-	d interface{}      // The user's userdata.
-	h HotplugHandle    // the handle belonging to this callback
+	f HotplugCallback // The user's function pointer
+	d interface{}     // The user's userdata.
+	h HotplugHandle   // the handle belonging to this callback
 }
 
 const (
 	HOTPLUG_EVENT_DEVICE_ARRIVED HotplugEvent = C.LIBUSB_HOTPLUG_EVENT_DEVICE_ARRIVED
 	HOTPLUG_EVENT_DEVICE_LEFT    HotplugEvent = C.LIBUSB_HOTPLUG_EVENT_DEVICE_LEFT
-	HOTPLUG_ANY                  int = C.LIBUSB_HOTPLUG_MATCH_ANY
+	HOTPLUG_ANY                  int          = C.LIBUSB_HOTPLUG_MATCH_ANY
 )
 
 var (
