@@ -89,6 +89,8 @@ func (ctx *Context) RegisterHotplugCallback(vendor_id int, product_id int, class
 }
 
 func (ctx *Context) DeregisterHotplugCallback(handle HotplugHandle) {
+	mutexHotplugCallbackMap.Lock()
+	defer mutexHotplugCallbackMap.Unlock()
 	C.libusb_hotplug_deregister_callback(ctx.ctx, C.libusb_hotplug_callback_handle(handle))
 	delete(hotplugCallbackMap, handle)
 }
