@@ -28,6 +28,7 @@ import (
 type Context struct {
 	ctx  *C.libusb_context
 	done chan struct{}
+	yield chan struct{}
 }
 
 func (c *Context) Debug(level int) {
@@ -52,6 +53,7 @@ func NewContext() *Context {
 			select {
 			case <-c.done:
 				return
+			case <-c.yield:
 			default:
 			}
 			if errno := C.libusb_handle_events_timeout_completed(c.ctx, &tv, nil); errno < 0 {
@@ -104,6 +106,10 @@ func (c *Context) ListDevices(each func(desc *Descriptor) bool) ([]*Device, erro
 		}
 	}
 	return ret, reterr
+}
+
+func (c *Context) HandleEvents() {
+	c.yield <- struct{}{}
 }
 
 func (c *Context) Close() error {
