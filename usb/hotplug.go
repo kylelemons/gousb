@@ -28,8 +28,9 @@ type (
 )
 
 type hotplugCallbackData struct {
-   f HotplugCallback  // The user's function pointer
-   d interface{}      // The user's userdata.
+	f HotplugCallback  // The user's function pointer
+	d interface{}      // The user's userdata.
+	h HotplugHandle    // the handle belonging to this callback
 }
 
 const (
@@ -57,6 +58,10 @@ func goCallback(ctx unsafe.Pointer, device unsafe.Pointer, event int, userdata u
 		//return 0
 	}
 	if realCallback.f(descriptor, HotplugEvent(event)) {
+		// let the garbage collector delete the callback
+		mutexHotplugCallbackMap.Lock()
+		defer mutexHotplugCallbackMap.Unlock()
+		delete(hotplugCallbackMap, realCallback.h)
 		return 1
 	} else {
 		return 0
@@ -83,6 +88,7 @@ func (ctx *Context) RegisterHotplugCallback(vendor_id int, product_id int, class
 	if res != C.LIBUSB_SUCCESS {
 		return 0, usbError(res)
 	}
+	data.h = handle
 	// protect the data from the garbage collector
 	hotplugCallbackMap[handle] = &data
 	return handle, nil
