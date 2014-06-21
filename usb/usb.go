@@ -38,6 +38,7 @@ func (c *Context) Debug(level int) {
 func NewContext() *Context {
 	c := &Context{
 		done: make(chan struct{}),
+		yield: make(chan struct{}),
 	}
 
 	if errno := C.libusb_init(&c.ctx); errno != 0 {
