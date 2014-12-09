@@ -19,7 +19,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/kylelemons/gousb/usb"
+	"github.com/JohnFarmer/gousb/usb"
 )
 
 const (

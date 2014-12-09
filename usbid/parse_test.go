@@ -19,7 +19,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kylelemons/gousb/usb"
+	"github.com/JohnFarmer/gousb/usb"
 )
 
 func TestParse(t *testing.T) {
