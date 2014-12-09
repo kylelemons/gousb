@@ -98,23 +98,14 @@ func main() {
 		log.Fatalf("no devices found")
 	}
 
-	//dev := devs[0]
-
-	my_dev, _ := ctx.GetDeviceWithVidPid(*device_vid_pid)
-	defer my_dev.Close()
+	dev := devs[0]
 
 	log.Printf("Connecting to endpoint...")
-	log.Printf("- %#v", my_dev.Descriptor)
-	ep, err := my_dev.OpenEndpoint(uint8(*config), uint8(*iface), uint8(*setup), uint8(*endpoint)|uint8(usb.ENDPOINT_DIR_IN))
+	log.Printf("- %#v", dev.Descriptor)
+
+	ep, err := dev.OpenEndpoint(uint8(*config), uint8(*iface), uint8(*setup), uint8(*endpoint)|uint8(usb.ENDPOINT_DIR_IN))
 	if err != nil {
 		log.Fatalf("open: %s", err)
 	}
 	_ = ep
-
-	buf := make([]byte, 64)
-	ep.Read(buf)
-
-	fmt.Println(string(buf[:]))
-	fmt.Printf("%c\n", buf)
 }
-
