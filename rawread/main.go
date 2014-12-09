@@ -25,7 +25,10 @@ import (
 )
 
 var (
-	device   = flag.String("device", "vend:prod", "Device to which to connect")
+	device_vid_pid   = flag.String(
+		"device",
+		"0483:5741",
+		"Device to which to connect")
 	config   = flag.Int("config", 1, "Endpoint to which to connect")
 	iface    = flag.Int("interface", 0, "Endpoint to which to connect")
 	setup    = flag.Int("setup", 0, "Endpoint to which to connect")
@@ -36,29 +39,32 @@ var (
 func main() {
 	flag.Parse()
 
-	// Only one context should be needed for an application.  It should always be closed.
+	// Only one context should be needed for an application.
+	// It should always be closed.
 	ctx := usb.NewContext()
 	defer ctx.Close()
 
 	ctx.Debug(*debug)
 
-	log.Printf("Scanning for device %q...", *device)
+	log.Printf("Scanning for device %q...", *device_vid_pid)
 
 	// ListDevices is used to find the devices to open.
 	devs, err := ctx.ListDevices(func(desc *usb.Descriptor) bool {
-		if fmt.Sprintf("%s:%s", desc.Vendor, desc.Product) != *device {
+		if fmt.Sprintf("%s:%s", desc.Vendor, desc.Product) != *device_vid_pid {
 			return false
 		}
 
 		// The usbid package can be used to print out human readable information.
 		fmt.Printf("  Protocol: %s\n", usbid.Classify(desc))
 
-		// The configurations can be examined from the Descriptor, though they can only
-		// be set once the device is opened.  All configuration references must be closed,
+		// The configurations can be examined from the Descriptor,
+		// though they can only
+		// be set once the device is opened.
+		// All configuration references must be closed,
 		// to free up the memory in libusb.
 		for _, cfg := range desc.Configs {
-			// This loop just uses more of the built-in and usbid pretty printing to list
-			// the USB devices.
+			// This loop just uses more of the built-in and
+			// usbid pretty printing to list the USB devices.
 			fmt.Printf("  %s:\n", cfg)
 			for _, alt := range cfg.Interfaces {
 				fmt.Printf("    --------------\n")
@@ -92,13 +98,23 @@ func main() {
 		log.Fatalf("no devices found")
 	}
 
-	dev := devs[0]
+	//dev := devs[0]
+
+	my_dev, _ := ctx.GetDeviceWithVidPid(*device_vid_pid)
+	defer my_dev.Close()
 
 	log.Printf("Connecting to endpoint...")
-	log.Printf("- %#v", dev.Descriptor)
-	ep, err := dev.OpenEndpoint(uint8(*config), uint8(*iface), uint8(*setup), uint8(*endpoint)|uint8(usb.ENDPOINT_DIR_IN))
+	log.Printf("- %#v", my_dev.Descriptor)
+	ep, err := my_dev.OpenEndpoint(uint8(*config), uint8(*iface), uint8(*setup), uint8(*endpoint)|uint8(usb.ENDPOINT_DIR_IN))
 	if err != nil {
 		log.Fatalf("open: %s", err)
 	}
 	_ = ep
+
+	buf := make([]byte, 64)
+	ep.Read(buf)
+
+	fmt.Println(string(buf[:]))
+	fmt.Printf("%c\n", buf)
 }
+

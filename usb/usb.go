@@ -23,6 +23,8 @@ import (
 	"log"
 	"reflect"
 	"unsafe"
+	"strings"
+	"strconv"
 )
 
 type Context struct {
@@ -104,6 +106,38 @@ func (c *Context) ListDevices(each func(desc *Descriptor) bool) ([]*Device, erro
 		}
 	}
 	return ret, reterr
+}
+
+func (c *Context) GetDeviceWithVidPid(vidpid string) (*Device, error){
+	var hDev *C.libusb_device_handle
+
+	vid_pid := strings.Split(vidpid, ":")
+	if len(vid_pid) != 2 {
+		log.Printf("VID:PID invalid:", vidpid)
+		return nil, nil
+	}
+
+	vid, err := strconv.ParseInt(vid_pid[0], 16, 16)
+	if err != nil {
+
+	}
+
+	pid, err := strconv.ParseInt(vid_pid[1], 16, 16)
+	if err != nil {
+
+	}
+
+	hDev = C.libusb_open_device_with_vid_pid(
+		c.ctx,
+		C.uint16_t(vid),
+		C.uint16_t(pid))
+
+	c_dev := C.libusb_get_device(hDev)
+	log.Println("Done libusb_get_device")
+	desc, _ := newDescriptor(c_dev)
+	dev := newDevice(hDev, desc)
+	
+	return dev, nil
 }
 
 func (c *Context) Close() error {
