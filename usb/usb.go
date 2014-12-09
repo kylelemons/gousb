@@ -20,8 +20,11 @@ package usb
 import "C"
 
 import (
+	"errors"
 	"log"
 	"reflect"
+	"strconv"
+	"strings"
 	"unsafe"
 )
 
@@ -104,6 +107,39 @@ func (c *Context) ListDevices(each func(desc *Descriptor) bool) ([]*Device, erro
 		}
 	}
 	return ret, reterr
+}
+
+func (c *Context) GetDeviceWithVidPid(vidpid string) (*Device, error) {
+	var hDev *C.libusb_device_handle
+
+	vid_pid := strings.Split(vidpid, ":")
+	if len(vid_pid) != 2 {
+		return nil, errors.New("VID:PID invalid")
+	}
+
+	vid, err := strconv.ParseInt(vid_pid[0], 16, 16)
+	if err != nil {
+		return nil, errors.New("VID invalid")
+	}
+
+	pid, err := strconv.ParseInt(vid_pid[1], 16, 16)
+	if err != nil {
+		return nil, errors.New("PID invalid")
+	}
+
+	hDev = C.libusb_open_device_with_vid_pid(
+		c.ctx,
+		C.uint16_t(vid),
+		C.uint16_t(pid))
+
+	c_dev := C.libusb_get_device(hDev)
+	desc, err := newDescriptor(c_dev)
+	if err != nil {
+		return nil, err
+	}
+	dev := newDevice(hDev, desc)
+
+	return dev, nil
 }
 
 func (c *Context) Close() error {
