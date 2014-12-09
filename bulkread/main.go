@@ -21,7 +21,7 @@ import (
 	"log"
 
 	"github.com/JohnFarmer/gousb/usb"
-	//"github.com/JohnFarmer/gousb/usbid"
+	"github.com/JohnFarmer/gousb/usbid"
 )
 
 var (
@@ -58,9 +58,27 @@ func main() {
 		log.Fatalf("open: %s", err)
 	}
 
+
+	// make a buffer according to the packet size of endpoint
+	// should be a multiple of <packet size> like 64/128/256
 	buf := make([]byte, 64)
 	ep.Read(buf)
 
 	fmt.Println(string(buf[:]))
 	fmt.Printf("%c\n", buf)
+	
+	// above code read from a end point like this
+	// (the device is a stm32 board with USB program,
+	// program on the board can be found on Github later)
+	/*
+      Endpoint Descriptor:
+              bLength                 7
+              bDescriptorType         5
+              bEndpointAddress     0x81  EP 1 IN
+              bmAttributes            2
+                Transfer Type            Bulk
+                Synch Type               None
+                Usage Type               Data
+              wMaxPacketSize     0x0040  1x 64 bytes
+              bInterval               0               */
 }
