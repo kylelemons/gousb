@@ -18,10 +18,12 @@ package main
 import (
 	"flag"
 	"fmt"
+	"time"
 	"log"
+	"strconv"
 
 	"github.com/JohnFarmer/gousb/usb"
-	"github.com/JohnFarmer/gousb/usbid"
+	//"github.com/kylelemons/gousb/usbid"
 )
 
 var (
@@ -32,8 +34,11 @@ var (
 	config   = flag.Int("config", 1, "Endpoint to which to connect")
 	iface    = flag.Int("interface", 0, "Endpoint to which to connect")
 	setup    = flag.Int("setup", 0, "Endpoint to which to connect")
-	endpoint = flag.Int("endpoint", 1, "Endpoint to which to connect")
+	endpoint_in = flag.Int("endpoint_in", 1, "Endpoint to which to connect")
+	endpoint_out = flag.Int("endpoint_out", 3, "Endpoint to which to connect")
 	debug    = flag.Int("debug", 3, "Debug level for libusb")
+	
+	count = int(0)
 )
 
 func main() {
@@ -51,25 +56,43 @@ func main() {
 	dev, _ := ctx.GetDeviceWithVidPid(*device_vid_pid)
 	defer dev.Close()
 
-	log.Printf("Connecting to endpoint...")
+	log.Printf("Connecting to endpoint_in...")
 	log.Printf("- %#v", dev.Descriptor)
-	ep, err := dev.OpenEndpoint(uint8(*config), uint8(*iface), uint8(*setup), uint8(*endpoint)|uint8(usb.ENDPOINT_DIR_IN))
+	ep_bulk_in, err := dev.OpenEndpoint(uint8(*config), uint8(*iface), uint8(*setup), uint8(*endpoint_in)|uint8(usb.ENDPOINT_DIR_IN))
 	if err != nil {
-		log.Fatalf("open: %s", err)
+		log.Fatalf("IN-open: %s", err)
 	}
 
+	ep_bulk_out, err := dev.OpenEndpoint(uint8(*config), uint8(*iface), uint8(*setup), uint8(*endpoint_out)|uint8(usb.ENDPOINT_DIR_OUT))
+	if err != nil {
+		log.Fatalf("OUT-open: %s", err)
+	}
 
-	// make a buffer according to the packet size of endpoint
-	// should be a multiple of <packet size> like 64/128/256
-	buf := make([]byte, 64)
-	ep.Read(buf)
+	// Loop Test of USB Write/Read
+	for {
+		fmt.Println("-------------------------------------")
+		count += 1
+		buf_out := make([]byte, 64)
+		fmt.Println(count)
+		
+		buf_out = []byte(strconv.Itoa(count))
+		ep_bulk_out.Write(buf_out)
 
-	fmt.Println(string(buf[:]))
-	fmt.Printf("%c\n", buf)
+		time.Sleep(1000 * time.Millisecond)
+
+		// make a buffer according to the packet size of endpoint_in
+		// should be a multiple of <packet size> like 64/128/256
+		buf_in := make([]byte, 64)
+		ep_bulk_in.Read(buf_in)
+
+		fmt.Println(string(buf_in[:]))
+		fmt.Printf("%c\n", buf_in)
+	}
 	
-	// above code read from a end point like this
+	// above code read from endpoints shown below 
 	// (the device is a stm32 board with USB program,
-	// program on the board can be found on Github later)
+	// program on the board would be found on Github later
+	// there is still a little bug right now)
 	/*
       Endpoint Descriptor:
               bLength                 7
@@ -81,4 +104,15 @@ func main() {
                 Usage Type               Data
               wMaxPacketSize     0x0040  1x 64 bytes
               bInterval               0               */
+	/*
+      Endpoint Descriptor:
+             bLength                 7
+             bDescriptorType         5
+             bEndpointAddress     0x03  EP 3 OUT
+             bmAttributes            2
+               Transfer Type            Bulk
+               Synch Type               None
+               Usage Type               Data
+             wMaxPacketSize     0x0040  1x 64 bytes
+             bInterval               0                */
 }
