@@ -25,6 +25,7 @@ import (
 	"unsafe"
 	"strings"
 	"strconv"
+	"errors"
 )
 
 type Context struct {
@@ -114,17 +115,17 @@ func (c *Context) GetDeviceWithVidPid(vidpid string) (*Device, error){
 	vid_pid := strings.Split(vidpid, ":")
 	if len(vid_pid) != 2 {
 		log.Printf("VID:PID invalid:", vidpid)
-		return nil, nil
+		return nil, errors.New("VIDPID invalid")
 	}
 
 	vid, err := strconv.ParseInt(vid_pid[0], 16, 16)
 	if err != nil {
-
+		return nil, errors.New("VID invalid")
 	}
 
 	pid, err := strconv.ParseInt(vid_pid[1], 16, 16)
 	if err != nil {
-
+		return nil, errors.New("PID invalid")
 	}
 
 	hDev = C.libusb_open_device_with_vid_pid(
