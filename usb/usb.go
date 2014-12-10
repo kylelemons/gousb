@@ -114,7 +114,6 @@ func (c *Context) GetDeviceWithVidPid(vidpid string) (*Device, error){
 
 	vid_pid := strings.Split(vidpid, ":")
 	if len(vid_pid) != 2 {
-		log.Printf("VID:PID invalid:", vidpid)
 		return nil, errors.New("VIDPID invalid")
 	}
 
@@ -134,7 +133,6 @@ func (c *Context) GetDeviceWithVidPid(vidpid string) (*Device, error){
 		C.uint16_t(pid))
 
 	c_dev := C.libusb_get_device(hDev)
-	log.Println("Done libusb_get_device")
 	desc, _ := newDescriptor(c_dev)
 	dev := newDevice(hDev, desc)
 	
