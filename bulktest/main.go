@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"time"
 	"log"
-	"strconv"
+	//"strconv"
 
 	"github.com/JohnFarmer/gousb/usb"
 	//"github.com/kylelemons/gousb/usbid"
@@ -29,7 +29,7 @@ import (
 var (
 	device_vid_pid   = flag.String(
 		"device",
-		"0483:5741",
+		"VID:PID",
 		"Device to which to connect")
 	config   = flag.Int("config", 1, "Endpoint to which to connect")
 	iface    = flag.Int("interface", 0, "Endpoint to which to connect")
@@ -58,6 +58,11 @@ func main() {
 
 	log.Printf("Connecting to endpoint_in...")
 	log.Printf("- %#v", dev.Descriptor)
+
+	// There should be a special USB device to do the loop test.
+	// I have got a STM32F1 Board, and here is the link of program.
+	// https://github.com/lixin9311/stm32_pos_usb
+	/*
 	ep_bulk_in, err := dev.OpenEndpoint(uint8(*config), uint8(*iface), uint8(*setup), uint8(*endpoint_in)|uint8(usb.ENDPOINT_DIR_IN))
 	if err != nil {
 		log.Fatalf("IN-open: %s", err)
@@ -73,8 +78,8 @@ func main() {
 		fmt.Println("-------------------------------------")
 		count += 1
 		buf_out := make([]byte, 64)
-		fmt.Println(count)
-		
+		fmt.Println("Sending: \t", count)
+	
 		buf_out = []byte(strconv.Itoa(count))
 		ep_bulk_out.Write(buf_out)
 
@@ -85,9 +90,9 @@ func main() {
 		buf_in := make([]byte, 64)
 		ep_bulk_in.Read(buf_in)
 
-		fmt.Println(string(buf_in[:]))
+		fmt.Println("Recieving: \t", string(buf_in[:]))
 		fmt.Printf("%c\n", buf_in)
-	}
+	} */
 	
 	// above code read from endpoints shown below 
 	// (the device is a stm32 board with USB program,
