@@ -100,7 +100,11 @@ func (c *Context) ListDevices(each func(desc *Descriptor) bool) ([]*Device, erro
 				reterr = err
 				continue
 			}
-			ret = append(ret, newDevice(handle, desc))
+			if dev, err := newDevice(handle, desc); err != nil {
+				reterr = err
+			} else {
+				ret = append(ret, dev)
+			}
 		}
 	}
 	return ret, reterr
