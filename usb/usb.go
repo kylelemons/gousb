@@ -109,34 +109,49 @@ func (c *Context) ListDevices(each func(desc *Descriptor) bool) ([]*Device, erro
 	return ret, reterr
 }
 
-func (c *Context) GetDeviceWithVidPid(vidpid string) (*Device, error) {
+// Open Device with VID:PID string
+// NOTE: This function is JUST for QUICK TESTING, and should NOT be used in
+// a real application.
+// Visit the below URL for detail.
+// http://libusb.sourceforge.net/api-1.0/group__dev.html#ga11ba48adb896b1492bbd3d0bf7e0f665
+func (c *Context) OpenDeviceWithVidPid(vidpid string) (*Device, error) {
 	var hDev *C.libusb_device_handle
 
 	vid_pid := strings.Split(vidpid, ":")
 	if len(vid_pid) != 2 {
-		return nil, errors.New("VID:PID invalid")
+		return nil, errors.New("invalid VID:PID, " + vidpid)
 	}
 
 	vid, err := strconv.ParseInt(vid_pid[0], 16, 16)
 	if err != nil {
-		return nil, errors.New("VID invalid")
+		return nil, errors.New(
+			"invalid VID " + vid_pid[0] + ", " + err.Error())
 	}
 
 	pid, err := strconv.ParseInt(vid_pid[1], 16, 16)
 	if err != nil {
-		return nil, errors.New("PID invalid")
+		return nil, errors.New(
+			"invalid PID " + vid_pid[1] + ", " + err.Error())
 	}
 
 	hDev = C.libusb_open_device_with_vid_pid(
 		c.ctx,
 		C.uint16_t(vid),
 		C.uint16_t(pid))
+	if hDev == nil {
+		return nil, errors.New("failed to open device with VID:PID " + vidpid)
+	}
 
 	c_dev := C.libusb_get_device(hDev)
 	desc, err := newDescriptor(c_dev)
 	if err != nil {
 		return nil, err
 	}
+
+	log.Println("----------------Testing-OpenDeviceWithVidPid----------------")
+	log.Printf("%03d.%03d %s:%s\n", desc.Bus, desc.Address, desc.Vendor, desc.Product)
+	log.Println("------------------------End-of-Test-------------------------")
+
 	dev := newDevice(hDev, desc)
 
 	return dev, nil
