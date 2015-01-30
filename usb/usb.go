@@ -124,14 +124,12 @@ func (c *Context) OpenDeviceWithVidPid(vidpid string) (*Device, error) {
 
 	vid, err := strconv.ParseInt(vid_pid[0], 16, 16)
 	if err != nil {
-		return nil, errors.New(
-			"invalid VID " + vid_pid[0] + ", " + err.Error())
+		return nil, errors.New("invalid VID " + vid_pid[0] + ", " + err.Error())
 	}
 
 	pid, err := strconv.ParseInt(vid_pid[1], 16, 16)
 	if err != nil {
-		return nil, errors.New(
-			"invalid PID " + vid_pid[1] + ", " + err.Error())
+		return nil, errors.New("invalid PID " + vid_pid[1] + ", " + err.Error())
 	}
 
 	hDev = C.libusb_open_device_with_vid_pid(
@@ -153,7 +151,6 @@ func (c *Context) OpenDeviceWithVidPid(vidpid string) (*Device, error) {
 	log.Println("------------------------End-of-Test-------------------------")
 
 	dev := newDevice(hDev, desc)
-
 	return dev, nil
 }
 
