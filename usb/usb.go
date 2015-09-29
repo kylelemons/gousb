@@ -20,6 +20,7 @@ package usb
 import "C"
 
 import (
+	"fmt"
 	"log"
 	"reflect"
 	"unsafe"
@@ -97,7 +98,7 @@ func (c *Context) ListDevices(each func(desc *Descriptor) bool) ([]*Device, erro
 		if each(desc) {
 			var handle *C.libusb_device_handle
 			if errno := C.libusb_open(dev, &handle); errno != 0 {
-				reterr = err
+				reterr = fmt.Errorf("libusb_open returned errno: %d", errno)
 				continue
 			}
 			ret = append(ret, newDevice(handle, desc))
