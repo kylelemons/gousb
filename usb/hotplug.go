@@ -93,9 +93,10 @@ func goCallback(ctx unsafe.Pointer, device unsafe.Pointer, event int, userdata u
 // RegisterHotplugCallback registers a hotplug callback function. The callback will fire when
 // a matching event occurs on a device matching vendorID, productID and class.
 // HOTPLUG_ANY can be used to match any vendor ID, product ID or device class.
+// If enumerate is true, the callback is called for matching currently attached devices.
 // It returns a function that can be called to deregister the callback.
 // Returning true from the callback will also deregister the callback.
-func (ctx *Context) RegisterHotplugCallback(vendorID int, productID int, class int, callback HotplugCallback, events HotplugEvent, enumerate bool) (func(), error) {
+func (ctx *Context) RegisterHotplugCallback(vendorID int, productID int, class int, enumerate bool, callback HotplugCallback, event HotplugEvent, events ...HotplugEvent) (func(), error) {
 	if ctx.hotplugCallbacks.byHandle == nil {
 		ctx.hotplugCallbacks.byHandle = make(map[hotplugHandle]*hotplugCallbackData)
 	}
@@ -115,7 +116,11 @@ func (ctx *Context) RegisterHotplugCallback(vendorID int, productID int, class i
 		enumflag = 0
 	}
 
-	res := C.attachCallback(ctx.ctx, C.libusb_hotplug_event(events), enumflag, C.int(vendorID), C.int(productID), C.int(class), dataPtr, (*C.libusb_hotplug_callback_handle)(&handle))
+	for _, e := range events {
+		event |= e
+	}
+
+	res := C.attachCallback(ctx.ctx, C.libusb_hotplug_event(event), enumflag, C.int(vendorID), C.int(productID), C.int(class), dataPtr, (*C.libusb_hotplug_callback_handle)(&handle))
 	if res != C.LIBUSB_SUCCESS {
 		return nil, usbError(res)
 	}
