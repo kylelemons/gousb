@@ -26,9 +26,10 @@ import (
 )
 
 type Context struct {
-	ctx   *C.libusb_context
-	done  chan struct{}
-	yield chan struct{}
+	ctx              *C.libusb_context
+	done             chan struct{}
+	yield            chan struct{}
+	hotplugCallbacks hotplugCallbackMap
 }
 
 func (c *Context) Debug(level int) {
@@ -37,7 +38,7 @@ func (c *Context) Debug(level int) {
 
 func NewContext() *Context {
 	c := &Context{
-		done: make(chan struct{}),
+		done:  make(chan struct{}),
 		yield: make(chan struct{}),
 	}
 

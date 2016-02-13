@@ -17,20 +17,34 @@ extern int attachCallback(
 import "C"
 
 import (
+	"errors"
 	"sync"
 	"unsafe"
 )
 
 type (
-	HotplugEvent    C.int
-	HotplugHandle   C.libusb_hotplug_callback_handle
-	HotplugCallback func(desc *Descriptor, event HotplugEvent) bool
+	HotplugEvent  C.int
+	HotplugHandle C.libusb_hotplug_callback_handle
+	// HotplugOpener is a function that will open the device that was plugged in.
+	HotplugOpener func() (*Device, error)
+	// A HotplugCallback function is called when a hotplug event is received.
+	// The function is called with the event, a descriptor, and a function which,
+	// when called, opens the device that generated the hotplug event.
+	//
+	// Returning true from the callback function unregisters the callback.
+	HotplugCallback func(desc *Descriptor, event HotplugEvent, opener HotplugOpener) bool
 )
 
 type hotplugCallbackData struct {
-	f HotplugCallback // The user's function pointer
-	d interface{}     // The user's userdata.
-	h HotplugHandle   // the handle belonging to this callback
+	f   HotplugCallback // The user's function pointer
+	d   interface{}     // The user's userdata
+	ctx *Context        // Pointer to the Context struct
+	h   HotplugHandle   // the handle belonging to this callback
+}
+
+type hotplugCallbackMap struct {
+	byHandle map[HotplugHandle]*hotplugCallbackData // lazily initialized in Register
+	sync.Mutex
 }
 
 const (
@@ -39,41 +53,51 @@ const (
 	HOTPLUG_ANY                  int          = C.LIBUSB_HOTPLUG_MATCH_ANY
 )
 
-var (
-	hotplugCallbackMap      map[HotplugHandle]*hotplugCallbackData
-	mutexHotplugCallbackMap sync.Mutex
-)
-
-func init() {
-	hotplugCallbackMap = make(map[HotplugHandle]*hotplugCallbackData)
-}
-
 //export goCallback
 func goCallback(ctx unsafe.Pointer, device unsafe.Pointer, event int, userdata unsafe.Pointer) C.int {
 	realCallback := (*hotplugCallbackData)(userdata)
-	descriptor, err := newDescriptor((*C.libusb_device)(device))
+	dev := (*C.libusb_device)(device)
+	descriptor, err := newDescriptor(dev)
 	if err != nil {
 		// TODO: what to do here? add an error callback?
 		panic("error happened in callback")
 		//return 0
 	}
-	if realCallback.f(descriptor, HotplugEvent(event)) {
+	var opener HotplugOpener
+	if HotplugEvent(event) == HOTPLUG_EVENT_DEVICE_ARRIVED {
+		opener = func() (*Device, error) {
+			var handle *C.libusb_device_handle
+			if errno := C.libusb_open(dev, &handle); errno != 0 {
+				return nil, usbError(errno)
+			}
+			return newDevice(handle, descriptor), nil
+		}
+	} else {
+		opener = func() (*Device, error) {
+			return nil, errors.New("Opener called when event is not HOTPLUG_EVENT_DEVICE_ARRIVED.")
+		}
+	}
+	if realCallback.f(descriptor, HotplugEvent(event), opener) {
 		// let the garbage collector delete the callback
-		mutexHotplugCallbackMap.Lock()
-		defer mutexHotplugCallbackMap.Unlock()
-		delete(hotplugCallbackMap, realCallback.h)
+		realCallback.ctx.hotplugCallbacks.Lock()
+		defer realCallback.ctx.hotplugCallbacks.Unlock()
+		delete(realCallback.ctx.hotplugCallbacks.byHandle, realCallback.h)
 		return 1
 	} else {
 		return 0
 	}
 }
 
-func (ctx *Context) RegisterHotplugCallback(vendor_id int, product_id int, class int, callback HotplugCallback, events HotplugEvent, enumerate bool) (HotplugHandle, error) {
-	mutexHotplugCallbackMap.Lock()
-	defer mutexHotplugCallbackMap.Unlock()
+func (ctx *Context) RegisterHotplugCallback(vendorID int, productID int, class int, callback HotplugCallback, events HotplugEvent, enumerate bool) (HotplugHandle, error) {
+	if ctx.hotplugCallbacks.byHandle == nil {
+		ctx.hotplugCallbacks.byHandle = make(map[HotplugHandle]*hotplugCallbackData)
+	}
+	ctx.hotplugCallbacks.Lock()
+	defer ctx.hotplugCallbacks.Unlock()
 	var handle HotplugHandle
 	data := hotplugCallbackData{
-		f: callback,
+		f:   callback,
+		ctx: ctx,
 	}
 	dataPtr := unsafe.Pointer(&data)
 
@@ -84,19 +108,19 @@ func (ctx *Context) RegisterHotplugCallback(vendor_id int, product_id int, class
 		enumflag = 0
 	}
 
-	res := C.attachCallback(ctx.ctx, C.libusb_hotplug_event(events), enumflag, C.int(vendor_id), C.int(product_id), C.int(class), dataPtr, (*C.libusb_hotplug_callback_handle)(&handle))
+	res := C.attachCallback(ctx.ctx, C.libusb_hotplug_event(events), enumflag, C.int(vendorID), C.int(productID), C.int(class), dataPtr, (*C.libusb_hotplug_callback_handle)(&handle))
 	if res != C.LIBUSB_SUCCESS {
 		return 0, usbError(res)
 	}
 	data.h = handle
 	// protect the data from the garbage collector
-	hotplugCallbackMap[handle] = &data
+	ctx.hotplugCallbacks.byHandle[handle] = &data
 	return handle, nil
 }
 
 func (ctx *Context) DeregisterHotplugCallback(handle HotplugHandle) {
-	mutexHotplugCallbackMap.Lock()
-	defer mutexHotplugCallbackMap.Unlock()
+	ctx.hotplugCallbacks.Lock()
+	defer ctx.hotplugCallbacks.Unlock()
 	C.libusb_hotplug_deregister_callback(ctx.ctx, C.libusb_hotplug_callback_handle(handle))
-	delete(hotplugCallbackMap, handle)
+	delete(ctx.hotplugCallbacks.byHandle, handle)
 }
