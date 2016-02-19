@@ -87,4 +87,12 @@ func main() {
 		// and can be interacted with.
 		_ = dev
 	}
+
+	// Test OpenDeviceWithVidPid
+	// You may change vid:pid string to a existing device's vid:pid
+	dev, err := ctx.OpenDeviceWithVidPid("0a12:0001")
+	_ = dev
+	if err != nil {
+		log.Println(err)
+	}
 }
