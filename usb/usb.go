@@ -22,14 +22,18 @@ import "C"
 import (
 	"log"
 	"reflect"
+	"sync"
 	"unsafe"
 )
 
+type empty struct{}
+
 type Context struct {
-	ctx              *C.libusb_context
-	done             chan struct{}
-	yield            chan struct{}
-	hotplugCallbacks hotplugCallbackMap
+	ctx                  *C.libusb_context
+	done                 chan struct{}
+	yield                chan struct{}
+	hotplugCallbacks     map[unsafe.Pointer]empty
+	hotplugCallbackMutex sync.Mutex
 }
 
 func (c *Context) Debug(level int) {
@@ -118,6 +122,7 @@ func (c *Context) Close() error {
 	close(c.done)
 	if c.ctx != nil {
 		C.libusb_exit(c.ctx)
+		c.cleanupCallbacks()
 	}
 	c.ctx = nil
 	return nil

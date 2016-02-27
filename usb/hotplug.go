@@ -2,6 +2,7 @@ package usb
 
 /*
 #include <libusb-1.0/libusb.h>
+#include <stdlib.h>
 
 extern int attachCallback(
 	libusb_context* ctx,
@@ -18,6 +19,7 @@ import "C"
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 	"unsafe"
 )
@@ -39,13 +41,11 @@ type (
 
 type hotplugCallbackData struct {
 	f   HotplugCallback // The user's function pointer
-	d   interface{}     // The user's userdata
 	ctx *Context        // Pointer to the Context struct
-	h   hotplugHandle   // the handle belonging to this callback
 }
 
 type hotplugCallbackMap struct {
-	byHandle map[hotplugHandle]*hotplugCallbackData // lazily initialized in Register
+	byID map[unsafe.Pointer]*hotplugCallbackData // lazily initialized in Register
 	sync.Mutex
 }
 
@@ -55,14 +55,82 @@ const (
 	HOTPLUG_ANY                  int          = C.LIBUSB_HOTPLUG_MATCH_ANY
 )
 
+var (
+	callbacks hotplugCallbackMap
+)
+
+// add adds the data to the map and returns its id
+func (m *hotplugCallbackMap) add(data *hotplugCallbackData) unsafe.Pointer {
+	m.Lock()
+	defer m.Unlock()
+
+	if m.byID == nil {
+		m.byID = make(map[unsafe.Pointer]*hotplugCallbackData)
+	}
+
+	// allocate memory to pass to C as user_data,
+	// but instead of using it to store the map key,
+	// just use the pointer as the map key.
+	id := C.malloc(1)
+	if id == nil {
+		panic(errors.New("Failed to allocate memory during callback registration"))
+	}
+	m.byID[id] = data
+	return id
+}
+
+func (m *hotplugCallbackMap) get(id unsafe.Pointer) (data *hotplugCallbackData, ok bool) {
+	data, ok = m.byID[id]
+	return
+}
+
+func (m *hotplugCallbackMap) remove(id unsafe.Pointer) {
+	m.Lock()
+	defer m.Unlock()
+	_, ok := m.byID[id]
+	if ok {
+		delete(m.byID, id)
+		C.free(id)
+	}
+}
+
+func (c *Context) addCallback(id unsafe.Pointer) {
+	c.hotplugCallbackMutex.Lock()
+	defer c.hotplugCallbackMutex.Unlock()
+	if c.hotplugCallbacks == nil {
+		c.hotplugCallbacks = make(map[unsafe.Pointer]empty)
+	}
+	c.hotplugCallbacks[id] = empty{}
+}
+
+func (c *Context) removeCallback(id unsafe.Pointer) {
+	c.hotplugCallbackMutex.Lock()
+	defer c.hotplugCallbackMutex.Unlock()
+	delete(c.hotplugCallbacks, id)
+}
+
+// cleanupCallbacks is called on Close, and it removes the callbacks
+// belonging to the context in the callbacks map
+func (c *Context) cleanupCallbacks() {
+	c.hotplugCallbackMutex.Lock()
+	defer c.hotplugCallbackMutex.Unlock()
+	for id := range c.hotplugCallbacks {
+		callbacks.remove(id)
+	}
+}
+
 //export goCallback
 func goCallback(ctx unsafe.Pointer, device unsafe.Pointer, event int, userdata unsafe.Pointer) C.int {
-	realCallback := (*hotplugCallbackData)(userdata)
+	dataID := userdata
+	realCallback, ok := callbacks.get(dataID)
+	if !ok {
+		panic(fmt.Errorf("USB hotplug callback function not found"))
+	}
 	dev := (*C.libusb_device)(device)
 	descriptor, err := newDescriptor(dev)
 	if err != nil {
 		// TODO: what to do here? add an error callback?
-		panic("error happened in callback")
+		panic(fmt.Errorf("Error during USB hotplug callback: %s", err))
 		//return 0
 	}
 	var opener HotplugOpener
@@ -80,10 +148,9 @@ func goCallback(ctx unsafe.Pointer, device unsafe.Pointer, event int, userdata u
 		}
 	}
 	if realCallback.f(descriptor, HotplugEvent(event), opener) {
-		// let the garbage collector delete the callback
-		realCallback.ctx.hotplugCallbacks.Lock()
-		defer realCallback.ctx.hotplugCallbacks.Unlock()
-		delete(realCallback.ctx.hotplugCallbacks.byHandle, realCallback.h)
+		// callback will be unregistered, delete the data from memory.
+		callbacks.remove(dataID)
+		realCallback.ctx.removeCallback(dataID)
 		return 1
 	} else {
 		return 0
@@ -96,18 +163,16 @@ func goCallback(ctx unsafe.Pointer, device unsafe.Pointer, event int, userdata u
 // If enumerate is true, the callback is called for matching currently attached devices.
 // It returns a function that can be called to deregister the callback.
 // Returning true from the callback will also deregister the callback.
-func (ctx *Context) RegisterHotplugCallback(vendorID int, productID int, class int, enumerate bool, callback HotplugCallback, event HotplugEvent, events ...HotplugEvent) (func(), error) {
-	if ctx.hotplugCallbacks.byHandle == nil {
-		ctx.hotplugCallbacks.byHandle = make(map[hotplugHandle]*hotplugCallbackData)
-	}
-	ctx.hotplugCallbacks.Lock()
-	defer ctx.hotplugCallbacks.Unlock()
+// Closing the context will deregister all callbacks automatically.
+func (c *Context) RegisterHotplugCallback(vendorID int, productID int, class int, enumerate bool, callback HotplugCallback, event HotplugEvent, events ...HotplugEvent) (func(), error) {
 	var handle hotplugHandle
 	data := hotplugCallbackData{
 		f:   callback,
-		ctx: ctx,
+		ctx: c,
 	}
-	dataPtr := unsafe.Pointer(&data)
+	// store the data in go memory, since we can't pass it to cgo.
+	dataID := callbacks.add(&data)
+	c.addCallback(dataID)
 
 	var enumflag C.libusb_hotplug_flag
 	if enumerate {
@@ -120,17 +185,15 @@ func (ctx *Context) RegisterHotplugCallback(vendorID int, productID int, class i
 		event |= e
 	}
 
-	res := C.attachCallback(ctx.ctx, C.libusb_hotplug_event(event), enumflag, C.int(vendorID), C.int(productID), C.int(class), dataPtr, (*C.libusb_hotplug_callback_handle)(&handle))
+	res := C.attachCallback(c.ctx, C.libusb_hotplug_event(event), enumflag, C.int(vendorID), C.int(productID), C.int(class), dataID, (*C.libusb_hotplug_callback_handle)(&handle))
 	if res != C.LIBUSB_SUCCESS {
+		callbacks.remove(dataID)
+		c.removeCallback(dataID)
 		return nil, usbError(res)
 	}
-	data.h = handle
-	// protect the data from the garbage collector
-	ctx.hotplugCallbacks.byHandle[handle] = &data
 	return func() {
-		ctx.hotplugCallbacks.Lock()
-		defer ctx.hotplugCallbacks.Unlock()
-		C.libusb_hotplug_deregister_callback(ctx.ctx, C.libusb_hotplug_callback_handle(handle))
-		delete(ctx.hotplugCallbacks.byHandle, handle)
+		C.libusb_hotplug_deregister_callback(c.ctx, C.libusb_hotplug_callback_handle(handle))
+		callbacks.remove(dataID)
+		c.removeCallback(dataID)
 	}, nil
 }
