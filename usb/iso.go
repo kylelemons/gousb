@@ -38,7 +38,7 @@ func iso_callback(cptr unsafe.Pointer) {
 
 func (end *endpoint) allocTransfer() *Transfer {
 	const (
-		iso_packets = 8 // 128 // 242
+		iso_packets = 200
 	)
 
 	xfer := C.libusb_alloc_transfer(C.int(iso_packets))
