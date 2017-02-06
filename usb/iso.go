@@ -128,19 +128,82 @@ func (t *Transfer) Close() error {
 	return nil
 }
 
+// a handler for isochronous transfer endpoints.
 func isochronous_xfer(e *endpoint, buf []byte, timeout time.Duration) (int, error) {
-	t := e.allocTransfer()
-	defer t.Close()
-
-	if err := t.Submit(timeout); err != nil {
-		log.Printf("iso: xfer failed to submit: %s", err)
-		return 0, err
+	if EndpointDirection(e.Address)&ENDPOINT_DIR_MASK != ENDPOINT_DIR_IN {
+		return 0, fmt.Errorf("usb: write: gousb supports only IN isochronous transfers")
 	}
+	if e.isoXfers == nil {
+		e.isoXfers = &isoXfers{}
+		e.isoXfers.init(timeout)
+		for i := 0; i < isoXfersInFlight; i++ {
+			e.isoXfers.transfers <- e.allocTransfer()
+		}
 
-	n, err := t.Wait(buf)
+	}
+	// refill the in-flight queue
+	go func() { e.isoXfers.submit(e.allocTransfer()) }()
+	return e.isoXfers.get(buf)
+}
+
+// a (potentially) submitted transfer
+type xferStatus struct {
+	t *Transfer
+	// err holds the result of t.Submit
+	err error
+}
+
+// represents a queue of iso transfers scheduled. It keeps multiple requests in flight to ensure that
+// anytime the host receives an transfer response, it has another transfer request ready to send.
+type isoXfers struct {
+	// unsubmitted transfers
+	transfers chan *Transfer
+	// submitted transfers
+	submitStatus chan xferStatus
+}
+
+const isoXfersInFlight = 5
+
+// submitter runs in the background, ensuring that there are always transfers ready for submission.
+func (x *isoXfers) submitter(timeout time.Duration) {
+	for t := range x.transfers {
+		err := t.Submit(timeout)
+		x.submitStatus <- xferStatus{t, err}
+	}
+}
+
+// init initializes an empty isoXfers and starts the submitter.
+func (x *isoXfers) init(timeout time.Duration) {
+	x.transfers = make(chan *Transfer, isoXfersInFlight)
+	x.submitStatus = make(chan xferStatus, isoXfersInFlight)
+	go x.submitter(timeout)
+}
+
+// stop stops the submitted
+func (x *isoXfers) stop() {
+	close(x.transfers)
+	for i := 0; i < isoXfersInFlight; i++ {
+		<-x.submitStatus
+	}
+}
+
+// submit sends a new transfer request.
+func (x *isoXfers) submit(t *Transfer) {
+	x.transfers <- t
+}
+
+// get retrieves a transfer from the queue.
+func (x *isoXfers) get(buf []byte) (int, error) {
+	st := <-x.submitStatus
+	defer st.t.Close()
+	if st.err != nil {
+		log.Printf("iso: xfer failed to submit: %s", st.err)
+		return 0, st.err
+	}
+	num, err := st.t.Wait(buf)
 	if err != nil {
 		log.Printf("iso: xfer failed: %s", err)
 		return 0, err
 	}
-	return n, err
+	return num, nil
 }

@@ -120,6 +120,8 @@ func (d *Device) Close() error {
 	return nil
 }
 
+// OpenEndpoint prepares an endpoint for reading/writing. It claims the interface passed in the arguments.
+// Users must call Endpoint.Close after endpoint is no longer used.
 func (d *Device) OpenEndpoint(conf, iface, setup, epoint uint8) (Endpoint, error) {
 	end := &endpoint{
 		Device: d,
