@@ -101,5 +101,5 @@ func main() {
 	if err != nil {
 		log.Fatalf("open: %s", err)
 	}
-	_ = ep
+	defer ep.Close()
 }

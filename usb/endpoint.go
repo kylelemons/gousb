@@ -25,20 +25,29 @@ import (
 	"unsafe"
 )
 
+// Endpoint represents a USB interface endpoint.
 type Endpoint interface {
+	// Read requests an IN transfer from the endpoint.
 	Read(b []byte) (int, error)
+	// Write sends an OUT transfer to the endpoint.
 	Write(b []byte) (int, error)
+	// Interface returns the InterfaceSetup of the interface to which this endpoint belongs.
 	Interface() InterfaceSetup
+	// Info returns the EndpointInfo of this endpoint.
 	Info() EndpointInfo
+	// Close releases the resources associated with the endpoint.
+	Close()
 }
 
 type endpoint struct {
 	*Device
 	InterfaceSetup
 	EndpointInfo
-	xfer func(*endpoint, []byte, time.Duration) (int, error)
+	xfer     func(*endpoint, []byte, time.Duration) (int, error)
+	isoXfers *isoXfers
 }
 
+// Read implements Endpoint.
 func (e *endpoint) Read(buf []byte) (int, error) {
 	if EndpointDirection(e.Address)&ENDPOINT_DIR_MASK != ENDPOINT_DIR_IN {
 		return 0, fmt.Errorf("usb: read: not an IN endpoint")
@@ -47,6 +56,7 @@ func (e *endpoint) Read(buf []byte) (int, error) {
 	return e.xfer(e, buf, e.ReadTimeout)
 }
 
+// Write implements Endpoint.
 func (e *endpoint) Write(buf []byte) (int, error) {
 	if EndpointDirection(e.Address)&ENDPOINT_DIR_MASK != ENDPOINT_DIR_OUT {
 		return 0, fmt.Errorf("usb: write: not an OUT endpoint")
@@ -55,11 +65,26 @@ func (e *endpoint) Write(buf []byte) (int, error) {
 	return e.xfer(e, buf, e.WriteTimeout)
 }
 
+// Interface implements Endpoint.
 func (e *endpoint) Interface() InterfaceSetup { return e.InterfaceSetup }
-func (e *endpoint) Info() EndpointInfo        { return e.EndpointInfo }
 
-// TODO(kevlar): (*Endpoint).Close
+// Info implements Endpoint.
+func (e *endpoint) Info() EndpointInfo { return e.EndpointInfo }
 
+// Close implements Endpoint.
+func (e *endpoint) Close() {
+	if e.isoXfers != nil {
+		e.isoXfers.stop()
+		e.isoXfers = nil
+	}
+	e.Device.lock.Lock()
+	defer e.Device.lock.Unlock()
+	if _, ok := e.Device.claimed[e.InterfaceSetup.Number]; ok {
+		C.libusb_release_interface(e.Device.handle, C.int(e.InterfaceSetup.Number))
+	}
+}
+
+// a handler for bulk transfer endpoints.
 func bulk_xfer(e *endpoint, buf []byte, timeout time.Duration) (int, error) {
 	if len(buf) == 0 {
 		return 0, nil
@@ -80,6 +105,7 @@ func bulk_xfer(e *endpoint, buf []byte, timeout time.Duration) (int, error) {
 	return int(cnt), nil
 }
 
+// a handler for interrupt transfer endpoints.
 func interrupt_xfer(e *endpoint, buf []byte, timeout time.Duration) (int, error) {
 	if len(buf) == 0 {
 		return 0, nil
