@@ -32,6 +32,7 @@ var DefaultControlTimeout = 250 * time.Millisecond //5 * time.Second
 
 type Device struct {
 	handle *C.libusb_device_handle
+	ctx    *Context
 
 	// Embed the device information for easy access
 	*Descriptor
@@ -46,9 +47,10 @@ type Device struct {
 	claimed map[uint8]int
 }
 
-func newDevice(handle *C.libusb_device_handle, desc *Descriptor) *Device {
+func newDevice(ctx *Context, handle *C.libusb_device_handle, desc *Descriptor) *Device {
 	ifaces := 0
 	d := &Device{
+		ctx:            ctx,
 		handle:         handle,
 		Descriptor:     desc,
 		ReadTimeout:    DefaultReadTimeout,
@@ -122,6 +124,10 @@ func (d *Device) Close() error {
 }
 
 func (d *Device) OpenEndpoint(conf, iface, setup, epoint uint8) (Endpoint, error) {
+	if nil == d.ctx.ctx {
+		return nil, fmt.Errorf("usb: can not open endpoint without context")
+	}
+
 	end := &endpoint{
 		Device: d,
 	}
