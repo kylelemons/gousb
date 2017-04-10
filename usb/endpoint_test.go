@@ -126,9 +126,9 @@ func TestOpenEndpoint(t *testing.T) {
 	}
 	i := ep.Info()
 	if got, want := i.Address, uint8(0x86); got != want {
-		t.Errorf("OpenEndpoint(cfg=1, if=1, alt=2, ep=0x86): ep.Info.Address = %x, want %x", got, want)
+		t.Errorf("OpenEndpoint(cfg=1, if=1, alt=1, ep=0x86): ep.Info.Address = %x, want %x", got, want)
 	}
 	if got, want := i.MaxIsoPacket, uint32(2*1024); got != want {
-		t.Errorf("OpenEndpoint(cfg=1, if=1, alt=2, ep=0x86): ep.Info.MaxIsoPacket = %d, want %d", got, want)
+		t.Errorf("OpenEndpoint(cfg=1, if=1, alt=1, ep=0x86): ep.Info.MaxIsoPacket = %d, want %d", got, want)
 	}
 }
