@@ -120,15 +120,15 @@ func TestOpenEndpoint(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenDeviceWithVidPid(0x8888, 0x0002): got error %v, want nil", err)
 	}
-	ep, err := dev.OpenEndpoint(1, 1, 2, 0x86)
+	ep, err := dev.OpenEndpoint(1, 1, 1, 0x86)
 	if err != nil {
-		t.Errorf("OpenEndpoint(cfg=1, if=1, alt=2, ep=0x86): got error %v, want nil", err)
+		t.Errorf("OpenEndpoint(cfg=1, if=1, alt=1, ep=0x86): got error %v, want nil", err)
 	}
 	i := ep.Info()
 	if got, want := i.Address, uint8(0x86); got != want {
-		t.Errorf("OpenEndpoint(cfg=1, if=1, alt=2, ep=0x86): ep.Info.Address = %x, want %x", got, want)
+		t.Errorf("OpenEndpoint(cfg=1, if=1, alt=1, ep=0x86): ep.Info.Address = %x, want %x", got, want)
 	}
-	if got, want := i.MaxIsoPacket, uint32(1024); got != want {
-		t.Errorf("OpenEndpoint(cfg=1, if=1, alt=2, ep=0x86): ep.Info.MaxIsoPacket = %d, want %d", got, want)
+	if got, want := i.MaxIsoPacket, uint32(2*1024); got != want {
+		t.Errorf("OpenEndpoint(cfg=1, if=1, alt=1, ep=0x86): ep.Info.MaxIsoPacket = %d, want %d", got, want)
 	}
 }

@@ -124,6 +124,7 @@ func (d *Device) OpenEndpoint(cfgNum, ifNum, setNum, epNum uint8) (Endpoint, err
 			setAlternate = i != 0
 			debug.Printf("found setup: %#v [default: %v]\n", s, !setAlternate)
 			ifs = &s
+			break
 		}
 	}
 	if ifs == nil {
