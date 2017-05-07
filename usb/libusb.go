@@ -35,7 +35,6 @@ type libusbContext C.libusb_context
 type libusbDevice C.libusb_device
 type libusbDevHandle C.libusb_device_handle
 type libusbTransfer C.struct_libusb_transfer
-type libusbIso C.struct_libusb_iso_packet_descriptor
 
 // libusbIntf is a set of trivial idiomatic Go wrappers around libusb C functions.
 // The underlying code is generally not testable or difficult to test,
@@ -356,11 +355,6 @@ func (libusbImpl) setIsoPacketLengths(t *libusbTransfer, length uint32) {
 
 // libusb is an injection point for tests
 var libusb libusbIntf = libusbImpl{}
-
-var (
-	libusbIsoSize   = C.sizeof_struct_libusb_iso_packet_descriptor
-	libusbIsoOffset = unsafe.Offsetof(C.struct_libusb_transfer{}.iso_packet_desc)
-)
 
 //export xfer_callback
 func xfer_callback(cptr unsafe.Pointer) {
