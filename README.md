@@ -6,7 +6,7 @@ This package was deprecated in favor of https://github.com/google/gousb.
 This package will still receive bugfixes for reported issues,
  but it will no longer be expanded with new functionality.
 
-Note that the [https://github.com/google/gousb](new package) is not a drop-in
+Note that the [new package](https://github.com/google/gousb) is not a drop-in
 replacement, as some elements of the API have changed. The most important changes:
 
 * device configurations and interfaces now need to be explicitly claimed before
