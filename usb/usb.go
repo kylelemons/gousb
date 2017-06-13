@@ -15,7 +15,7 @@
 
 // Package usb provides a wrapper around libusb-1.0.
 //
-// Note that this package was deprecated in favor of github.com/google/gousb.
+// Deprecated: this package was deprecated in favor of github.com/google/gousb.
 // Please use the new package when starting new projects.
 package usb
 
