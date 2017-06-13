@@ -71,7 +71,7 @@ func TestEndpoint(t *testing.T) {
 					fakeT := lib.waitForSubmitted()
 					fakeT.length = tc.ret
 					fakeT.status = tc.status
-					close(fakeT.done)
+					fakeT.done <- struct{}{}
 				}()
 				opv := op.Func.Interface().(func(*endpoint, []byte) (int, error))
 				got, err := opv(ep, tc.buf)

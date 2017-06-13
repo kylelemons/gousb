@@ -96,18 +96,18 @@ func TestTransferProtocol(t *testing.T) {
 		ft.length = 5
 		ft.status = LIBUSB_TRANSFER_COMPLETED
 		copy(ft.buf, []byte{1, 2, 3, 4, 5})
-		close(ft.done)
+		ft.done <- struct{}{}
 
 		ft = f.waitForSubmitted()
 		ft.length = 99
 		ft.status = LIBUSB_TRANSFER_COMPLETED
 		copy(ft.buf, []byte{12, 12, 12, 12, 12})
-		close(ft.done)
+		ft.done <- struct{}{}
 
 		ft = f.waitForSubmitted()
 		ft.length = 123
 		ft.status = LIBUSB_TRANSFER_CANCELLED
-		close(ft.done)
+		ft.done <- struct{}{}
 	}()
 
 	xfers[0].submit()

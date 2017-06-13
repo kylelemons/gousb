@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"log"
 	"reflect"
+	"sync"
 	"time"
 	"unsafe"
 )
@@ -69,9 +70,9 @@ type libusbIntf interface {
 	setAlt(*libusbDevHandle, uint8, uint8) error
 
 	// transfer
-	alloc(*libusbDevHandle, uint8, TransferType, time.Duration, int, []byte) (*libusbTransfer, error)
+	alloc(*libusbDevHandle, uint8, TransferType, time.Duration, int, []byte, chan struct{}) (*libusbTransfer, error)
 	cancel(*libusbTransfer) error
-	submit(*libusbTransfer, chan struct{}) error
+	submit(*libusbTransfer) error
 	data(*libusbTransfer) (int, TransferStatus)
 	free(*libusbTransfer)
 	setIsoPacketLengths(*libusbTransfer, uint32)
@@ -312,7 +313,7 @@ func (libusbImpl) setAlt(d *libusbDevHandle, iface, setup uint8) error {
 	return fromUSBError(C.libusb_set_interface_alt_setting((*C.libusb_device_handle)(d), C.int(iface), C.int(setup)))
 }
 
-func (libusbImpl) alloc(d *libusbDevHandle, addr uint8, tt TransferType, timeout time.Duration, isoPackets int, buf []byte) (*libusbTransfer, error) {
+func (libusbImpl) alloc(d *libusbDevHandle, addr uint8, tt TransferType, timeout time.Duration, isoPackets int, buf []byte, done chan struct{}) (*libusbTransfer, error) {
 	xfer := C.libusb_alloc_transfer(C.int(isoPackets))
 	if xfer == nil {
 		return nil, fmt.Errorf("libusb_alloc_transfer(%d) failed", isoPackets)
@@ -324,15 +325,18 @@ func (libusbImpl) alloc(d *libusbDevHandle, addr uint8, tt TransferType, timeout
 	xfer.num_iso_packets = C.int(isoPackets)
 	xfer.buffer = (*C.uchar)((unsafe.Pointer)(&buf[0]))
 	xfer.length = C.int(len(buf))
-	return (*libusbTransfer)(xfer), nil
+	ret := (*libusbTransfer)(xfer)
+	xferDoneMap.Lock()
+	xferDoneMap.m[ret] = done
+	xferDoneMap.Unlock()
+	return ret, nil
 }
 
 func (libusbImpl) cancel(t *libusbTransfer) error {
 	return fromUSBError(C.libusb_cancel_transfer((*C.struct_libusb_transfer)(t)))
 }
 
-func (libusbImpl) submit(t *libusbTransfer, done chan struct{}) error {
-	t.user_data = (unsafe.Pointer)(&done)
+func (libusbImpl) submit(t *libusbTransfer) error {
 	return fromUSBError(C.submit((*C.struct_libusb_transfer)(t)))
 }
 
@@ -356,10 +360,20 @@ func (libusbImpl) setIsoPacketLengths(t *libusbTransfer, length uint32) {
 // libusb is an injection point for tests
 var libusb libusbIntf = libusbImpl{}
 
-//export xfer_callback
-func xfer_callback(cptr unsafe.Pointer) {
-	ch := *(*chan struct{})(cptr)
-	close(ch)
+// xferDoneMap keeps a map of done callback channels for all allocated transfers.
+var xferDoneMap = struct {
+	m map[*libusbTransfer]chan struct{}
+	sync.RWMutex
+}{
+	m: make(map[*libusbTransfer]chan struct{}),
+}
+
+//export xferCallback
+func xferCallback(xfer *C.struct_libusb_transfer) {
+	xferDoneMap.RLock()
+	ch := xferDoneMap.m[(*libusbTransfer)(xfer)]
+	xferDoneMap.RUnlock()
+	ch <- struct{}{}
 }
 
 // for benchmarking
